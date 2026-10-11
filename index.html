@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- mirror-cad model page: one model from the link fragment (#m=…), turning, with its rules and print files.
+     &get=stl or &get=3mf downloads the file as soon as the page opens. Static: the fragment never reaches the host. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Model</title>
+<style>
+  /* Glass inks on Glass ground (github.com/JoniBach/glass), sized for a desk, not a mirror across the room */
+  :root { --ground: #000; --ink-1: #fff; --ink-2: #b4b4b4; --ink-3: #5c5c5c; --gap: 24px; }
+  html, body { margin: 0; height: 100%; background: var(--ground); color: var(--ink-1); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif; }
+  body { display: grid; grid-template-rows: 1fr auto; }
+  #stage { position: relative; min-height: 0; cursor: grab; touch-action: none; }
+  #stage:active { cursor: grabbing; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  footer { padding: var(--gap) calc(var(--gap) * 1.5) calc(var(--gap) * 1.5); display: grid; grid-template-columns: 1fr auto; gap: var(--gap); align-items: end; }
+  h1 { margin: 0; font-size: 34px; font-weight: 500; }
+  .meta { color: var(--ink-2); font-size: 18px; margin-top: 6px; }
+  .note { color: var(--ink-3); font-size: 15px; margin-top: 4px; max-width: 70ch; }
+  ul { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 22px; color: var(--ink-2); font-size: 16px; }
+  li b { color: var(--ink-1); font-weight: 500; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  button { font: inherit; font-size: 15px; color: var(--ink-1); background: none; border: 1px solid var(--ink-3); border-radius: 6px; padding: 9px 16px; cursor: pointer; }
+  button:hover { border-color: var(--ink-1); }
+  #status { color: var(--ink-2); font-size: 15px; text-align: right; min-height: 1.2em; margin-top: 8px; }
+  .problem { display: grid; place-items: center; height: 100%; color: var(--ink-2); font-size: 20px; padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<footer>
+  <div><h1 id="title"></h1><div class="meta" id="meta"></div><div class="note" id="note"></div><ul id="rules"></ul></div>
+  <div><div class="actions"><button data-get="stl">Download STL</button><button data-get="3mf">Download 3MF</button><button id="copy">Copy link</button></div><div id="status"></div></div>
+</footer>
+<script type="module" src="view.mjs"></script>
+</body>
+</html>
