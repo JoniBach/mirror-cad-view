@@ -7,10 +7,13 @@
 //     seen from outside; Z up, the bed at z = 0.
 //     parts (optional): [[name, role, label, first, count]], runs of triangles in t; role "support" is printed, then
 //     removed. Without parts, the whole model is one part.
+//   Or placed shapes, for things made of repeated parts (nine keys): each shape once, then where each copy goes:
+//     { …, shapes: [{ role, label, q, p, t }], place: [[shape, a, b, c, d, e, f, g, h, i, j, k, l, name?]] }
+//     (a 3 × 4 transform by rows, in mm). decode() expands them, so the rest of the page sees one model.
 // "1." is the format version: newer pages must keep reading old links.
 
 export const VERSION = 1;
-export const LIMITS = { vertices: 200000, triangles: 400000 };
+export const LIMITS = { vertices: 200000, triangles: 400000, shapes: 64, places: 1024 };
 
 const b64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
@@ -48,10 +51,22 @@ export async function encode(model) {
   return `${VERSION}.${b64(bytes)}`;
 }
 
-// The model link's parts from a location hash: { token, get }.
+// The model link's parts from a location hash: { token, gist, get }. A short link (#s=<id>) names a GitHub Gist
+// holding the token.
 export function parseHash(hash) {
   const params = new URLSearchParams(String(hash).replace(/^#/, ''));
-  return { token: params.get('m'), get: params.get('get') };
+  return { token: params.get('m'), gist: params.get('s'), get: params.get('get') };
+}
+
+// The token from a short link's Gist (GitHub's API allows this without signing in, about 60 times an hour).
+export async function fromGist(id) {
+  if (!/^[0-9a-f]{20,40}$/i.test(String(id))) throw new Error("this short link's ID isn't a Gist ID");
+  const r = await fetch(`https://api.github.com/gists/${id}`);
+  if (r.status === 404) throw new Error('This short link points to a Gist that no longer exists.');
+  if (!r.ok) throw new Error(`GitHub didn't send the model (${r.status}). Try again in a minute.`);
+  const f = (await r.json()).files?.['model.txt'];
+  if (!f) throw new Error('This Gist holds no model.');
+  return (f.truncated ? await (await fetch(f.raw_url)).text() : f.content).trim();
 }
 
 export async function decode(token) {
@@ -61,6 +76,7 @@ export async function decode(token) {
   let model;
   try { model = JSON.parse(new TextDecoder().decode(await pipe(unb64(m[2]), new DecompressionStream('deflate-raw')))); }
   catch { throw new Error('This link is damaged: it may have been cut short when it was shared. Copy the whole link again.'); }
+  if (model && Array.isArray(model.shapes)) model = expand(model);
   const errors = check(model);
   if (errors.length) throw new Error(errors[0]);
   return model;
@@ -75,6 +91,30 @@ export function check(m) {
   if (m.p.some((x) => !Number.isInteger(x)) || m.t.some((i) => !Number.isInteger(i) || i < 0 || i >= n)) return ['broken model data'];
   if (m.parts != null && (!Array.isArray(m.parts) || m.parts.some((x) => !Array.isArray(x) || !Number.isInteger(x[3]) || !Number.isInteger(x[4]) || x[3] < 0 || x[3] + x[4] > m.t.length / 3))) return ['broken parts list'];
   return [];
+}
+
+// Placed shapes -> one model ({ q, p, t, parts }), each copy its own part.
+export function expand(m) {
+  const { shapes, place, ...meta } = m;
+  if (!Array.isArray(place) || shapes.length > LIMITS.shapes || place.length > LIMITS.places) throw new Error('model too big for a link');
+  for (const sh of shapes) { const e = check(sh); if (e.length) throw new Error(e[0]); }
+  const list = place.map(([i, ...rest], n) => {
+    const sh = shapes[i], t = rest.slice(0, 12);
+    if (!sh || t.length !== 12 || t.some((x) => !Number.isFinite(x))) throw new Error('broken placement');
+    const at = ([x, y, z]) => [t[0] * x + t[1] * y + t[2] * z + t[3], t[4] * x + t[5] * y + t[6] * z + t[7], t[8] * x + t[9] * y + t[10] * z + t[11]];
+    return { name: rest[12] || `${sh.label || 'shape'} ${n + 1}`, role: sh.role || 'part', label: sh.label || 'shape', triangles: triangles(sh).map((tri) => tri.map(at)) };
+  });
+  return { ...meta, ...fromParts(list) };
+}
+
+// fromShapes(parts) for tools: [{ shape, role, label, triangles (local), matrix: 12 numbers, name }] -> { shapes, place }
+export function fromShapes(list) {
+  const index = new Map(), shapes = [], place = [];
+  for (const x of list) {
+    if (!index.has(x.shape)) { index.set(x.shape, shapes.length); shapes.push({ role: x.role, label: x.label, ...fromTriangles(x.triangles) }); }
+    place.push([index.get(x.shape), ...x.matrix, x.name]);
+  }
+  return { shapes, place };
 }
 
 // Triangles in mm: [[[x,y,z] ×3], …], all of them or one part's ([name, role, label, first, count]).

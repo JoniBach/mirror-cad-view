@@ -1,6 +1,6 @@
 // The model page: decode the link, draw the model (dark faces, ink creases, turning slowly; drag to turn it yourself),
 // and make print files in the browser. Nothing is uploaded: the model only ever lives in the link.
-import { parseHash, decode, triangles, partsOf, stl, threemf, filename } from './model-link.mjs';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename } from './model-link.mjs';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
   EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group } from './three.min.js';
 
@@ -75,9 +75,10 @@ function show(model) {
 }
 
 async function main() {
-  const { token, get } = parseHash(location.hash);
-  let model;
+  const { token: long, gist, get } = parseHash(location.hash);
+  let model, token = long;
   try {
+    if (!token && gist) token = await fromGist(gist); // a short link: the data is in a Gist
     if (!token) throw new Error('Open a model link made by mirror-cad (cad link).');
     model = await decode(token);
   } catch (e) {
@@ -88,7 +89,7 @@ async function main() {
   show(model);
   for (const b of document.querySelectorAll('[data-get]')) b.addEventListener('click', () => download(model, b.dataset.get));
   $('copy').addEventListener('click', async () => {
-    await navigator.clipboard.writeText(`${location.origin}${location.pathname}#m=${token}`); status('Link copied');
+    await navigator.clipboard.writeText(`${location.origin}${location.pathname}${gist ? `#s=${gist}` : `#m=${token}`}`); status('Link copied'); // short stays short
   });
   if (get === 'stl' || get === '3mf') download(model, get);
 }
