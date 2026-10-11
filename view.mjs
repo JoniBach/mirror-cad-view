@@ -19,7 +19,7 @@ function show(model) {
   document.title = `${model.title || 'Model'} ${model.version || ''}`.trim();
   $('title').textContent = model.title || 'Model';
   $('meta').textContent = [model.version, model.material, model.set && `set ${model.set}`, model.src].filter(Boolean).join(' · ');
-  const supports = partsOf(model).filter((p) => p[1] === 'support').map((p) => p[2]);
+  const supports = partsOf(model).filter((p) => p[1] !== 'part').map((p) => p[2]); // supports and references
   $('note').textContent = [model.orientation, supports.length && `Faint: ${supports.join(', ')}.`].filter(Boolean).join(' ');
   $('rules').replaceChildren(...(model.rules || []).map(([label, value, unit]) => {
     const li = document.createElement('li'), b = document.createElement('b');
@@ -32,7 +32,7 @@ function show(model) {
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute(triangles(model, part).flat(2), 3));
     g.rotateX(-Math.PI / 2); g.computeVertexNormals(); g.computeBoundingBox();
-    return { g, support: part[1] === 'support' };
+    return { g, support: part[1] !== 'part' };
   });
   const box = parts[0].g.boundingBox.clone(); parts.forEach((p) => box.union(p.g.boundingBox));
   const mid = [(box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2];
