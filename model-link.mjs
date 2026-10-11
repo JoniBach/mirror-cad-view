@@ -2,9 +2,11 @@
 // host, so a public page can open private designs. Data only, never code. Runs in browsers and Node (18+).
 //
 //   https://<host>/#m=1.<base64url(deflate-raw(JSON))>[&get=stl|3mf]
-//   JSON: { title, version, src, set, material, orientation, rules: [[label, value, unit]], q, p, t }
+//   JSON: { title, version, src, set, material, orientation, rules: [[label, value, unit]], q, p, t, parts }
 //     p: [x, y, z, …] whole multiples of q (mm); t: [a, b, c, …] triangles as vertex indices, counter-clockwise
 //     seen from outside; Z up, the bed at z = 0.
+//     parts (optional): [[name, role, label, first, count]], runs of triangles in t; role "support" is printed, then
+//     removed. Without parts, the whole model is one part.
 // "1." is the format version: newer pages must keep reading old links.
 
 export const VERSION = 1;
@@ -25,6 +27,20 @@ export function fromTriangles(tris) {
     if (ids[0] !== ids[1] && ids[1] !== ids[2] && ids[0] !== ids[2]) t.push(...ids); // snapping can collapse slivers
   }
   return { q, p, t };
+}
+
+// fromParts([{ name, role, label, triangles }]) -> { q, p, t, parts }: shared corners merged across parts.
+export function fromParts(list) {
+  const m = fromTriangles(list.flatMap((x) => x.triangles)), parts = [];
+  // fromTriangles drops triangles that snapping collapses, so count each part's survivors in order
+  let at = 0, kept = 0;
+  const grid = (v) => v.map((c) => Math.round(c / m.q)).join(',');
+  for (const x of list) {
+    const first = kept;
+    for (const tri of x.triangles) { const k = tri.map(grid); if (k[0] !== k[1] && k[1] !== k[2] && k[0] !== k[2]) kept++; at++; }
+    parts.push([x.name, x.role || 'part', x.label || x.name, first, kept - first]);
+  }
+  return { ...m, parts };
 }
 
 export async function encode(model) {
@@ -57,15 +73,20 @@ export function check(m) {
   if (m.p.length / 3 > LIMITS.vertices || m.t.length / 3 > LIMITS.triangles) return ['model too big for a link'];
   const n = m.p.length / 3;
   if (m.p.some((x) => !Number.isInteger(x)) || m.t.some((i) => !Number.isInteger(i) || i < 0 || i >= n)) return ['broken model data'];
+  if (m.parts != null && (!Array.isArray(m.parts) || m.parts.some((x) => !Array.isArray(x) || !Number.isInteger(x[3]) || !Number.isInteger(x[4]) || x[3] < 0 || x[3] + x[4] > m.t.length / 3))) return ['broken parts list'];
   return [];
 }
 
-// Triangles in mm: [[[x,y,z] ×3], …]
-export function triangles(m) {
+// Triangles in mm: [[[x,y,z] ×3], …], all of them or one part's ([name, role, label, first, count]).
+export function triangles(m, part) {
   const v = (i) => [m.p[3 * i] * m.q, m.p[3 * i + 1] * m.q, m.p[3 * i + 2] * m.q], out = [];
-  for (let i = 0; i < m.t.length; i += 3) out.push([v(m.t[i]), v(m.t[i + 1]), v(m.t[i + 2])]);
+  const [from, to] = part ? [part[3] * 3, (part[3] + part[4]) * 3] : [0, m.t.length];
+  for (let i = from; i < to; i += 3) out.push([v(m.t[i]), v(m.t[i + 1]), v(m.t[i + 2])]);
   return out;
 }
+
+// The model's parts, always at least one: [[name, role, label, first, count]]
+export const partsOf = (m) => (m.parts?.length ? m.parts : [['body', 'part', m.title || 'model', 0, m.t.length / 3]]);
 
 // ---------- files ----------
 export const filename = (m, ext) => `${String(m.src || m.title || 'model').split('/').pop().replace(/[^\w@.=-]+/g, '-')}${m.set ? `-${m.set.replace(/,/g, '-')}` : ''}.${ext}`;
@@ -87,18 +108,21 @@ export function stl(m) {
 
 // 3MF: the 3D model XML in a ZIP (stored, no compression: no library needed).
 export function threemf(m) {
-  const verts = [];
-  for (let i = 0; i < m.p.length; i += 3) verts.push(`<vertex x="${+(m.p[i] * m.q).toFixed(4)}" y="${+(m.p[i + 1] * m.q).toFixed(4)}" z="${+(m.p[i + 2] * m.q).toFixed(4)}"/>`);
-  const tris = [];
-  for (let i = 0; i < m.t.length; i += 3) tris.push(`<triangle v1="${m.t[i]}" v2="${m.t[i + 1]}" v3="${m.t[i + 2]}"/>`);
+  // One object per part (a support shows as its own object in the slicer), each with the vertices it uses
+  const objects = partsOf(m).map(([name, , label, first, count], n) => {
+    const remap = new Map(), verts = [], tris = [];
+    const id = (i) => { if (!remap.has(i)) { remap.set(i, remap.size); verts.push(`<vertex x="${+(m.p[3 * i] * m.q).toFixed(4)}" y="${+(m.p[3 * i + 1] * m.q).toFixed(4)}" z="${+(m.p[3 * i + 2] * m.q).toFixed(4)}"/>`); } return remap.get(i); };
+    for (let k = first * 3; k < (first + count) * 3; k += 3) tris.push(`<triangle v1="${id(m.t[k])}" v2="${id(m.t[k + 1])}" v3="${id(m.t[k + 2])}"/>`);
+    return { id: n + 1, name: label || name, verts, tris };
+  });
   const esc = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <metadata name="Title">${esc(m.title || '')} ${esc(m.version || '')}</metadata>
 <metadata name="Designer">mirror-cad</metadata>
 <metadata name="Description">${esc(m.src || '')}${m.set ? ` (${esc(m.set)})` : ''}</metadata>
-<resources><object id="1" type="model" name="${esc(m.title || 'model')}"><mesh><vertices>${verts.join('')}</vertices><triangles>${tris.join('')}</triangles></mesh></object></resources>
-<build><item objectid="1"/></build>
+<resources>${objects.map((o) => `<object id="${o.id}" type="model" name="${esc(o.name)}"><mesh><vertices>${o.verts.join('')}</vertices><triangles>${o.tris.join('')}</triangles></mesh></object>`).join('')}</resources>
+<build>${objects.map((o) => `<item objectid="${o.id}"/>`).join('')}</build>
 </model>`;
   return zip([
     ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>'],

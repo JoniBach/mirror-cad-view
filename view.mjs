@@ -1,6 +1,6 @@
 // The model page: decode the link, draw the model (dark faces, ink creases, turning slowly; drag to turn it yourself),
 // and make print files in the browser. Nothing is uploaded: the model only ever lives in the link.
-import { parseHash, decode, triangles, stl, threemf, filename } from './model-link.mjs';
+import { parseHash, decode, triangles, partsOf, stl, threemf, filename } from './model-link.mjs';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
   EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group } from './three.min.js';
 
@@ -19,22 +19,31 @@ function show(model) {
   document.title = `${model.title || 'Model'} ${model.version || ''}`.trim();
   $('title').textContent = model.title || 'Model';
   $('meta').textContent = [model.version, model.material, model.set && `set ${model.set}`, model.src].filter(Boolean).join(' · ');
-  $('note').textContent = model.orientation || '';
+  const supports = partsOf(model).filter((p) => p[1] === 'support').map((p) => p[2]);
+  $('note').textContent = [model.orientation, supports.length && `Faint: ${supports.join(', ')}.`].filter(Boolean).join(' ');
   $('rules').replaceChildren(...(model.rules || []).map(([label, value, unit]) => {
     const li = document.createElement('li'), b = document.createElement('b');
     b.textContent = `${value}${unit && unit !== 'segments' ? ` ${unit}` : ''}`; li.append(`${label} `, b); return li;
   }));
 
-  // Geometry: JSCAD's Z-up becomes three's Y-up; centred on the turning axis, resting on its base.
-  const pos = triangles(model).flat(2), g = new BufferGeometry();
-  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  g.rotateX(-Math.PI / 2); g.computeVertexNormals(); g.computeBoundingBox(); g.computeBoundingSphere();
-  const box = g.boundingBox, r = g.boundingSphere.radius;
-  g.translate(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, -(box.min.z + box.max.z) / 2);
+  // Geometry per part: JSCAD's Z-up becomes three's Y-up; centred on the turning axis. Supports (printed, then
+  // removed) are faint lines only, so the part they hold up shows through.
+  const parts = partsOf(model).map((part) => {
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(triangles(model, part).flat(2), 3));
+    g.rotateX(-Math.PI / 2); g.computeVertexNormals(); g.computeBoundingBox();
+    return { g, support: part[1] === 'support' };
+  });
+  const box = parts[0].g.boundingBox.clone(); parts.forEach((p) => box.union(p.g.boundingBox));
+  const mid = [(box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2];
+  const r = Math.hypot(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) / 2;
 
   const turn = new Group(), tilt = new Group();
-  turn.add(new Mesh(g, new MeshLambertMaterial({ color: 0x3a3a3a, flatShading: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
-  turn.add(new LineSegments(new EdgesGeometry(g, 25), new LineBasicMaterial({ color: 0xffffff })));
+  for (const { g, support } of parts) {
+    g.translate(-mid[0], -mid[1], -mid[2]);
+    if (!support) turn.add(new Mesh(g, new MeshLambertMaterial({ color: 0x3a3a3a, flatShading: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })));
+    turn.add(new LineSegments(new EdgesGeometry(g, 25), new LineBasicMaterial({ color: support ? 0x5c5c5c : 0xffffff })));
+  }
   tilt.add(turn); tilt.rotation.x = 0.45;
   const scene = new Scene();
   scene.add(tilt, new AmbientLight(0xffffff, 0.6));
