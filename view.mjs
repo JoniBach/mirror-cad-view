@@ -158,8 +158,13 @@ function show(model) {
   };
   $('supports').closest('label').hidden = !parts.some((p) => p.role === 'support');
   $('references').closest('label').hidden = !parts.some((p) => p.role === 'reference');
-  $('toggle').onclick = () => { $('panel').hidden = !$('panel').hidden; };
-  if (parts.length === 1 && innerWidth < 900) $('panel').hidden = true; // one part: nothing to manage
+  // The panel: a side panel on wide screens; on phones a drawer, closed at first and closed by tapping the model
+  const narrow = matchMedia('(max-width: 760px)');
+  const panel = (open) => { $('panel').hidden = !open; $('toggle').hidden = open && narrow.matches; };
+  $('toggle').onclick = () => panel($('panel').hidden);
+  $('close').onclick = () => panel(false);
+  $('stage').addEventListener('pointerdown', () => { if (narrow.matches && !$('panel').hidden) panel(false); }, true);
+  panel(!narrow.matches);
 
   // ---------- drawing ----------
   const stage = $('stage'), renderer = new WebGLRenderer({ antialias: true });

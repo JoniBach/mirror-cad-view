@@ -57,13 +57,23 @@
   .eye.off { color: var(--ink-3); }
   .selected { background: #1a1a1a !important; color: var(--ink-1) !important; }
   #toggle { position: absolute; top: 14px; right: 14px; z-index: 2; padding: 6px 12px; font-size: 13px; background: #000; }
-  @media (max-width: 760px) { body { grid-template-columns: 1fr; } #panel { position: fixed; inset: 0 0 0 auto; background: #000; z-index: 3; } }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding-right: 14px; }
+  #close { padding: 4px 10px; font-size: 13px; margin-top: 10px; }
+  /* Phones: the panel is a drawer over the model's right side, closed until opened; tap the model to close it */
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; }
+    #panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(320px, 85vw); background: #000; z-index: 5; box-shadow: -12px 0 24px #000; }
+    footer { padding: 16px; grid-template-columns: 1fr; gap: 12px; }
+    h1 { font-size: 26px; }
+    .actions { justify-content: flex-start; }
+    #status { text-align: left; }
+  }
 </style>
 </head>
 <body>
 <div id="stage"><button id="toggle" title="Show or hide the parts panel">Parts</button></div>
 <aside id="panel">
-  <h2>View</h2>
+  <div class="panel-head"><h2>View</h2><button id="close" title="Hide the parts panel">Close</button></div>
   <div class="controls">
     <div class="seg" id="mode"><button data-mode="solid" class="on">Solid</button><button data-mode="wire">Wireframe</button><button data-mode="xray">X-ray</button></div>
     <label class="row"><span style="width:64px">Explode</span><input type="range" id="explode" min="0" max="1" step="0.01" value="0"></label>
