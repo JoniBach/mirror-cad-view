@@ -1,11 +1,12 @@
 // The model page: decode the link, draw the model (dark faces, ink creases, turning slowly; drag to turn it yourself),
 // with a parts panel to show, hide and restyle each part, and make print files in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename } from './model-link.mjs';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename } from './model-link.mjs?v=ff7ea5d';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=ff7ea5d';
 
 const $ = (id) => document.getElementById(id);
+const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
 const status = (t) => { $('status').textContent = t; };
 
 function download(model, kind) {
@@ -159,7 +160,7 @@ function show(model) {
   $('supports').closest('label').hidden = !parts.some((p) => p.role === 'support');
   $('references').closest('label').hidden = !parts.some((p) => p.role === 'reference');
   // The panel: a side panel on wide screens; on phones a drawer, closed at first and closed by tapping the model
-  const narrow = matchMedia('(max-width: 760px)');
+  const narrow = matchMedia(DRAWER);
   const panel = (open) => { $('panel').hidden = !open; $('toggle').hidden = open && narrow.matches; };
   $('toggle').onclick = () => panel($('panel').hidden);
   $('close').onclick = () => panel(false);

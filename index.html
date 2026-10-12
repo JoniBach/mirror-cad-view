@@ -59,8 +59,9 @@
   #toggle { position: absolute; top: 14px; right: 14px; z-index: 2; padding: 6px 12px; font-size: 13px; background: #000; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; padding-right: 14px; }
   #close { padding: 4px 10px; font-size: 13px; margin-top: 10px; }
-  /* Phones: the panel is a drawer over the model's right side, closed until opened; tap the model to close it */
-  @media (max-width: 760px) {
+  /* Phones and touch tablets: the panel is a drawer over the model's right side, closed until opened; tap the model
+     to close it. Keep this query the same as DRAWER in view.mjs. */
+  @media (max-width: 760px), (pointer: coarse) and (max-width: 1100px) {
     body { grid-template-columns: 1fr; }
     #panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(320px, 85vw); background: #000; z-index: 5; box-shadow: -12px 0 24px #000; }
     footer { padding: 16px; grid-template-columns: 1fr; gap: 12px; }
@@ -72,7 +73,7 @@
 </head>
 <body>
 <div id="stage"><button id="toggle" title="Show or hide the parts panel">Parts</button></div>
-<aside id="panel">
+<aside id="panel" hidden><!-- closed until the script opens it on a wide screen with a mouse -->
   <div class="panel-head"><h2>View</h2><button id="close" title="Hide the parts panel">Close</button></div>
   <div class="controls">
     <div class="seg" id="mode"><button data-mode="solid" class="on">Solid</button><button data-mode="wire">Wireframe</button><button data-mode="xray">X-ray</button></div>
@@ -89,6 +90,6 @@
   <div><h1 id="title"></h1><div class="meta" id="meta"></div><div class="note" id="note"></div><ul class="rules" id="rules"></ul></div>
   <div><div class="actions"><button data-get="stl">Download STL</button><button data-get="3mf">Download 3MF</button><button id="copy">Copy link</button></div><div id="status"></div></div>
 </footer>
-<script type="module" src="view.mjs"></script>
+<script type="module" src="view.mjs?v=ff7ea5d"></script>
 </body>
 </html>
