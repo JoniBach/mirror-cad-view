@@ -21,8 +21,9 @@ async function pipe(bytes, stream) { return new Uint8Array(await new Response(ne
 
 // fromTriangles([[[x,y,z] ×3], …]) -> { q, p, t }: shared corners merged on a grid ~1/5000 of the model's size.
 export function fromTriangles(tris) {
-  const all = tris.flat();
-  const extent = Math.max(...[0, 1, 2].map((k) => Math.max(...all.map((v) => v[k])) - Math.min(...all.map((v) => v[k]))));
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; // a loop: spreading big models overflows the stack
+  for (const tri of tris) for (const v of tri) for (let k = 0; k < 3; k++) { if (v[k] < lo[k]) lo[k] = v[k]; if (v[k] > hi[k]) hi[k] = v[k]; }
+  const extent = tris.length ? Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) : 0;
   const q = Number((10 ** Math.floor(Math.log10(extent / 5000 || 1))).toPrecision(1));
   const p = [], t = [], index = new Map();
   for (const tri of tris) {
