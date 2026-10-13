@@ -1,16 +1,20 @@
 // The model page: decode the link, draw the model (dark faces, ink creases, turning slowly; drag to turn it yourself),
-// with a parts panel to show, hide and restyle each part, and make print files in the browser. Nothing is uploaded:
+// with a parts panel to show, hide and restyle each part, tick the parts a download holds, and make print files (STL,
+// or a 3MF in Bambu Studio's layout) in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename } from './model-link.mjs?v=248e1d0';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=d5f104a';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=248e1d0';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=d5f104a';
 
 const $ = (id) => document.getElementById(id);
 const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
 const status = (t) => { $('status').textContent = t; };
 
-function download(model, kind) {
-  const bytes = kind === '3mf' ? threemf(model) : stl(model), name = filename(model, kind);
+// A print file of the parts ticked (pick: { keep, name }), or of every printed part
+async function download(model, kind, pick = {}) {
+  if (pick.keep && !pick.keep.size) return status('Tick the parts to download in the parts panel');
+  status(`Making ${kind.toUpperCase()}…`);
+  const bytes = kind === '3mf' ? await threemf(model, pick.keep) : stl(model, pick.keep), name = filename(model, kind, pick.name);
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([bytes], { type: kind === '3mf' ? 'model/3mf' : 'model/stl' })), download: name });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
@@ -38,7 +42,7 @@ function show(model) {
     const g = new BufferGeometry();
     g.setAttribute('position', new Float32BufferAttribute(triangles(model, part).flat(2), 3));
     g.rotateX(-Math.PI / 2); g.computeVertexNormals(); g.computeBoundingBox();
-    return { k, name: part[0], role: part[1], label: part[2], g, visible: true, style: 'auto' };
+    return { k, name: part[0], role: part[1], label: part[2], g, visible: true, style: 'auto', ticked: part[1] !== 'reference' }; // references only check a fit
   });
   const box = new Box3(); parts.forEach((p) => box.union(p.g.boundingBox));
   const mid = box.getCenter(new Vector3()), r = box.getSize(new Vector3()).length() / 2 || 1;
@@ -98,8 +102,11 @@ function show(model) {
   const styleOf = (list) => { const s = new Set(list.map((p) => p.style)); return s.size === 1 ? [...s][0] : 'mixed'; };
   const button = (cls, text, title, fn) => { const b = el('button', cls, text); b.title = title; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; };
   function controls(list) {
-    const shown = list.some((p) => p.visible);
-    return [
+    const shown = list.some((p) => p.visible), ticked = list.filter((p) => p.ticked).length;
+    const box = Object.assign(el('input', 'tick'), { type: 'checkbox', checked: ticked === list.length, indeterminate: ticked > 0 && ticked < list.length,
+      title: 'In the download: tick to include' });
+    box.onclick = (e) => { e.stopPropagation(); list.forEach((p) => { p.ticked = box.checked; }); renderTree(); };
+    return [box,
       button(`eye${shown ? '' : ' off'}`, shown ? '●' : '○', shown ? 'Shown: click to hide' : 'Hidden: click to show', () => { list.forEach((p) => { p.visible = !shown; }); apply(); }),
       button('style', styleOf(list), 'Style: auto, solid, wire, x-ray or faint', () => {
         const next = STYLES[(STYLES.indexOf(styleOf(list)) + 1) % STYLES.length] || 'auto';
@@ -109,6 +116,8 @@ function show(model) {
   }
   const isSelected = (list) => list.length && list.every((p) => view.selected.has(p));
   function renderTree() {
+    const n = parts.filter((p) => p.ticked).length, printed = parts.filter((p) => p.role !== 'reference').length;
+    $('picked').textContent = $('picked-foot').textContent = !n ? 'Download: nothing ticked' : n === printed && parts.every((p) => p.ticked || p.role === 'reference') ? `Download: every printed part (${n})` : `Download: ${n} of ${parts.length} parts`;
     $('tree').replaceChildren(...groups.map((g) => {
       const li = el('li', 'group'), line = el('div', 'line'), single = g.copies.length === 1;
       const tail = el('span', 'tail');
@@ -143,6 +152,22 @@ function show(model) {
     } else status('');
     apply();
   }
+
+  // ---------- what a download holds ----------
+  const tick = (fn) => { parts.forEach((p) => { p.ticked = fn(p); }); renderTree(); };
+  $('tick-all').onclick = () => tick((p) => p.role !== 'reference');
+  $('tick-none').onclick = () => tick(() => false);
+  $('tick-shown').onclick = () => tick((p) => effective(p) !== 'hidden');
+  $('tick-selected').onclick = () => { if (view.selected.size) tick((p) => view.selected.has(p)); else status('Select a part first: click it in the model or the list'); };
+  // The parts ticked, and a name for them: everything (no name), one copy (cap-2-4), one kind (keycap), or a count
+  const picked = () => {
+    const on = parts.filter((p) => p.ticked);
+    if (on.length === parts.filter((p) => p.role !== 'reference').length && on.every((p) => p.role !== 'reference')) return {};
+    const things = new Set(on.map((p) => thingOf(p.name))), kinds = new Set(on.map((p) => p.label));
+    const one = things.size === 1 && [...things][0]; // a single object's parts are all one thing: name them
+    const name = one ? one.split('.')[0] : things.has('') ? on.map((p) => p.label).join('-') : kinds.size === 1 ? [...kinds][0] : `${things.size}-things`;
+    return { keep: new Set(on.map((p) => p.k)), name };
+  };
 
   // ---------- controls ----------
   for (const b of $('mode').querySelectorAll('button')) b.onclick = () => { view.mode = b.dataset.mode; $('mode').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); apply(); };
@@ -202,6 +227,7 @@ function show(model) {
     last = now; renderer.render(scene, camera);
   });
   apply();
+  return { picked };
 }
 
 async function main() {
@@ -216,12 +242,12 @@ async function main() {
     document.querySelector('.problem').textContent = e.message;
     return;
   }
-  show(model);
-  for (const b of document.querySelectorAll('[data-get]')) b.addEventListener('click', () => download(model, b.dataset.get));
+  const project = show(model);
+  for (const b of document.querySelectorAll('[data-get]')) b.addEventListener('click', () => download(model, b.dataset.get, project.picked()));
   $('copy').addEventListener('click', async () => {
     await navigator.clipboard.writeText(`${location.origin}${location.pathname}${gist ? `#s=${gist}` : `#m=${token}`}`); status('Link copied'); // short stays short
   });
-  if (get === 'stl' || get === '3mf') download(model, get);
+  if (get === 'stl' || get === '3mf') download(model, get); // older links: every printed part
 }
 
 window.addEventListener('hashchange', () => location.reload());

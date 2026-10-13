@@ -1,6 +1,7 @@
 <!doctype html>
 <!-- mirror-cad model page: one model from the link (#m=… or a short link, #s=<gist>), with a parts panel to show, hide
-     and restyle each part, and print files made in the browser. &get=stl or &get=3mf downloads as the page opens. -->
+     and restyle each part and tick the ones a download holds, and print files made in the browser. &get=stl or &get=3mf
+     downloads every printed part as the page opens. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -24,6 +25,7 @@
   .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
   button { font: inherit; font-size: 15px; color: var(--ink-1); background: none; border: 1px solid var(--ink-3); border-radius: 6px; padding: 9px 16px; cursor: pointer; }
   button:hover { border-color: var(--ink-1); }
+  #picked-foot { color: var(--ink-3); font-size: 13px; text-align: right; margin-top: 8px; }
   #status { color: var(--ink-2); font-size: 15px; text-align: right; min-height: 1.2em; margin-top: 8px; }
   .problem { display: grid; place-items: center; height: 100%; color: var(--ink-2); font-size: 20px; padding: 40px; text-align: center; grid-column: 1 / -1; }
 
@@ -51,6 +53,16 @@
   .copies[hidden] { display: none; }
   .copy { font-size: 13px; }
   .count, .role { color: var(--ink-3); font-size: 12px; }
+  .pick { display: flex; align-items: center; gap: 6px; padding: 0 18px 6px; flex-wrap: wrap; }
+  .pick span { color: var(--ink-3); font-size: 12px; margin-right: 2px; }
+  .pick button { padding: 3px 8px; font-size: 12px; color: var(--ink-2); }
+  .picked { padding: 0 18px 4px; color: var(--ink-3); font-size: 12px; }
+  /* The download ticks, drawn here so a part-ticked group's dash shows on the dark ground */
+  .tick { appearance: none; position: relative; width: 13px; height: 13px; margin: 0 4px 0 0; border: 1px solid var(--ink-3); border-radius: 3px; background: none; cursor: pointer; }
+  .tick:checked { background: var(--ink-1); border-color: var(--ink-1); }
+  .tick:checked::after { content: ""; position: absolute; left: 3.5px; top: 0.5px; width: 3px; height: 7px; border: solid var(--ground); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .tick:indeterminate { border-color: var(--ink-1); }
+  .tick:indeterminate::after { content: ""; position: absolute; left: 2px; right: 2px; top: 5px; height: 2px; background: var(--ink-1); }
   .eye, .style { background: none; border: 0; padding: 2px 4px; color: var(--ink-2); font-size: 12px; cursor: pointer; }
   .eye { font-size: 13px; width: 20px; }
   .style { width: 44px; text-align: right; }
@@ -67,7 +79,7 @@
     footer { padding: 16px; grid-template-columns: 1fr; gap: 12px; }
     h1 { font-size: 26px; }
     .actions { justify-content: flex-start; }
-    #status { text-align: left; }
+    #status, #picked-foot { text-align: left; }
   }
 </style>
 </head>
@@ -84,12 +96,14 @@
     <button id="reset">Reset view</button>
   </div>
   <h2>Parts</h2>
+  <div class="pick"><span>Tick</span><button id="tick-all" title="Tick every printed part">All</button><button id="tick-none" title="Untick everything">None</button><button id="tick-shown" title="Tick only the parts shown">Shown</button><button id="tick-selected" title="Tick only the selected part">Selected</button></div>
+  <div class="picked" id="picked"></div>
   <ul class="tree" id="tree"></ul>
 </aside>
 <footer>
   <div><h1 id="title"></h1><div class="meta" id="meta"></div><div class="note" id="note"></div><ul class="rules" id="rules"></ul></div>
-  <div><div class="actions"><button data-get="stl">Download STL</button><button data-get="3mf">Download 3MF</button><button id="copy">Copy link</button></div><div id="status"></div></div>
+  <div><div class="actions"><button data-get="stl">Download STL</button><button data-get="3mf">Download 3MF</button><button id="copy">Copy link</button></div><div id="picked-foot"></div><div id="status"></div></div>
 </footer>
-<script type="module" src="view.mjs?v=248e1d0"></script>
+<script type="module" src="view.mjs?v=d5f104a"></script>
 </body>
 </html>
