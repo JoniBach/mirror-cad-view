@@ -13,7 +13,7 @@
 // "1." is the format version: newer pages must keep reading old links.
 
 export const VERSION = 1;
-export const LIMITS = { vertices: 200000, triangles: 400000, shapes: 64, places: 1024 };
+export const LIMITS = { vertices: 200000, triangles: 400000, shapes: 512, places: 2048 }; // every keycap with its own legend is its own shape
 
 const b64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
