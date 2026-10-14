@@ -100,6 +100,10 @@
   <div><h1 id="title"></h1><div class="meta" id="meta"></div><div class="note" id="note"></div><ul class="rules" id="rules"></ul></div>
   <div><div class="actions"><button data-get="stl">Download STL</button><button data-get="3mf">Download 3MF</button><button id="copy">Copy link</button></div><div id="picked-foot"></div><div id="status"></div></div>
 </footer>
-<script type="module" src="view.mjs?v=5272ca0"></script>
+<script>
+  // If the page's script can't run (a stale copy, a blocked request, a bug), say so instead of leaving a black page
+  addEventListener('error', (e) => { const s = document.getElementById('status'); if (s && !document.getElementById('title').textContent) s.textContent = `The page didn't load (${e.message || 'a script failed'}). Reload it; if that doesn't help, send this line to Claude.`; }, true);
+</script>
+<script type="module" src="view.mjs?v=a3e87f9"></script>
 </body>
 </html>

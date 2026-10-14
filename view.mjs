@@ -2,9 +2,9 @@
 // with a parts panel to show, hide and restyle each part, tick the parts a download holds, and make print files (STL,
 // or a 3MF in Bambu Studio's layout) in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=5272ca0';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=a3e87f9';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=5272ca0';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=a3e87f9';
 
 const $ = (id) => document.getElementById(id);
 const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
