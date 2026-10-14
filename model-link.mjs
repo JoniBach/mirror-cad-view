@@ -136,9 +136,9 @@ export const filename = (m, ext, picked = '') => `${[String(m.src || m.title || 
 // Which parts a file holds: all the printed ones (references are only there to check a fit), or the indices picked
 const chosen = (m, keep) => partsOf(m).filter((x, i) => (keep ? keep.has(i) : x[1] !== 'reference'));
 
-// Binary STL (mm): the parts picked, as one mesh.
+// Binary STL (mm): the parts picked, as one mesh, each part mended (mesh) as for 3MF.
 export function stl(m, keep) {
-  const tris = chosen(m, keep).flatMap((x) => triangles(m, x)), buf = new ArrayBuffer(84 + 50 * tris.length), dv = new DataView(buf);
+  const tris = chosen(m, keep).flatMap((x) => { const { verts, tris: t } = mesh(triangles(m, x)); return t.map((ids) => ids.map((i) => verts[i])); }), buf = new ArrayBuffer(84 + 50 * tris.length), dv = new DataView(buf);
   const head = `mirror-cad ${m.src || m.title || ''}`.slice(0, 80);
   for (let i = 0; i < head.length; i++) dv.setUint8(i, head.charCodeAt(i) & 0x7f);
   dv.setUint32(80, tris.length, true);
@@ -183,15 +183,87 @@ export async function threemf(m, keep) {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const num = (x) => String(Number(x.toFixed(5)));
 
-// triangles -> { verts, tris }: shared corners merged, zero-area triangles (three corners in a line) dropped. T-junctions
-// left by JSCAD's booleans stay: Bambu Studio counts them as open edges but loads and slices the parts as they are.
+// triangles -> { verts, tris }: corners within a micron merged, zero-area triangles (three corners in a line) dropped,
+// and the part closed. JSCAD's booleans leave T-junctions (a corner of one face in the middle of a neighbour's edge) and
+// lose the odd sliver face, so a part's faces don't join up: Bambu Studio says "manifold = no", splits it into fragments
+// and its repair can fill a legend's letters with sheets. So a triangle with a loose corner lying along its open edge is
+// split there, one corner at a time until none is left, and any pinhole still open (a loop of open edges less than a
+// millimetre round) is closed with a fan. Each part comes out as one closed body per piece (a keycap; each letter).
 export function mesh(tris) {
-  const index = new Map(), verts = [], out = [];
-  const at = (v) => { const k = v.map((c) => Math.round(c / 1e-4)).join(','); if (!index.has(k)) { index.set(k, verts.length); verts.push(v); } return index.get(k); };
-  const area2 = (ids) => { const [a, b, c] = ids.map((i) => verts[i]), u = [0, 1, 2].map((k) => b[k] - a[k]), w = [0, 1, 2].map((k) => c[k] - a[k]);
-    return Math.hypot(u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]); };
-  for (const t of tris) for (let i = 1; i < t.length - 1; i++) { const ids = [at(t[0]), at(t[i]), at(t[i + 1])]; if (new Set(ids).size === 3 && area2(ids) > 1e-8) out.push(ids); }
-  return { verts, tris: out };
+  const MERGE = 1e-3, verts = [], index = new Map(), out = [];
+  const key = (v) => v.map((c) => Math.round(c / MERGE)).join(',');
+  const at = (v) => { // the same corner as one already seen within MERGE (it may sit across a rounding boundary)
+    const g = v.map((c) => Math.round(c / MERGE));
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      for (const i of index.get(`${g[0] + dx},${g[1] + dy},${g[2] + dz}`) || []) if (Math.hypot(verts[i][0] - v[0], verts[i][1] - v[1], verts[i][2] - v[2]) < MERGE) return i;
+    }
+    const k = key(v); if (!index.has(k)) index.set(k, []); index.get(k).push(verts.length); verts.push(v); return verts.length - 1;
+  };
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (u, w) => [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+  const area2 = (ids) => { const [a, b, c] = ids.map((i) => verts[i]); return Math.hypot(...cross(sub(b, a), sub(c, a))); };
+  for (const t of tris) for (let i = 1; i < t.length - 1; i++) { const ids = [at(t[0]), at(t[i]), at(t[i + 1])]; if (new Set(ids).size === 3 && area2(ids) > 1e-9) out.push(ids); }
+
+  // Mend: split a triangle at a loose corner lying along its open edge, one corner at a time, until none is left
+  const TOL = 2e-3, CELL = 1, cell = (x) => Math.floor(x / CELL);
+  for (let pass = 0; pass < 50; pass++) {
+    const edges = new Set(); for (const [a, b, c] of out) edges.add(`${a},${b}`).add(`${b},${c}`).add(`${c},${a}`);
+    const isOpen = (a, b) => !edges.has(`${b},${a}`), loose = new Set();
+    for (const [a, b, c] of out) for (const [x, y] of [[a, b], [b, c], [c, a]]) if (isOpen(x, y)) loose.add(x).add(y);
+    if (!loose.size) break;
+    const grid = new Map();
+    for (const i of loose) { const k = verts[i].map(cell).join(','); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i); }
+    // The loose corner along a -> b nearest the line, if any
+    const along = (a, b) => {
+      const p = verts[a], d = sub(verts[b], p), len = Math.sqrt(dot(d, d));
+      const lo = [0, 1, 2].map((k) => cell(Math.min(p[k], verts[b][k]) - TOL)), hi = [0, 1, 2].map((k) => cell(Math.max(p[k], verts[b][k]) + TOL));
+      let best = null;
+      for (let x = lo[0]; x <= hi[0]; x++) for (let y = lo[1]; y <= hi[1]; y++) for (let z = lo[2]; z <= hi[2]; z++) {
+        for (const i of grid.get(`${x},${y},${z}`) || []) {
+          if (i === a || i === b) continue;
+          const w = sub(verts[i], p), t = dot(w, d) / (len * len);
+          if (t * len < TOL || (1 - t) * len < TOL) continue;
+          const off = Math.hypot(...cross(w, d)) / len;
+          if (off < TOL && (!best || off < best[1])) best = [i, off];
+        }
+      }
+      return best;
+    };
+    let split = 0;
+    const n = out.length;
+    for (let k = 0; k < n; k++) {
+      const t = out[k];
+      let pick = null;
+      for (let e = 0; e < 3; e++) {
+        const a = t[e], b = t[(e + 1) % 3];
+        if (!isOpen(a, b)) continue;
+        const f = along(a, b);
+        if (f && (!pick || f[1] < pick[1])) pick = [f[0], f[1], e];
+      }
+      if (!pick) continue;
+      const [v, , e] = pick, a = t[e], b = t[(e + 1) % 3], c = t[(e + 2) % 3];
+      out[k] = [a, v, c]; out.push([v, b, c]); split++;
+    }
+    if (!split) break;
+  }
+  // What's left are pinholes: a sliver face the booleans lost, a loop of open edges a fraction of a millimetre round.
+  // Close each with a fan.
+  const kept = out.filter((ids) => area2(ids) > 1e-9), edges = new Set();
+  for (const [a, b, c] of kept) edges.add(`${a},${b}`).add(`${b},${c}`).add(`${c},${a}`);
+  const next = new Map();
+  for (const k of edges) { const [a, b] = k.split(',').map(Number); if (!edges.has(`${b},${a}`)) next.set(a, b); }
+  const PINHOLE = 1;
+  for (const start of [...next.keys()]) {
+    if (!next.has(start)) continue;
+    const loop = [start];
+    for (let v = next.get(start); v !== start && v != null && loop.length < 64; v = next.get(v)) loop.push(v);
+    if (next.get(loop[loop.length - 1]) !== start) continue;
+    const round = loop.reduce((sum, v, i) => sum + Math.hypot(...sub(verts[loop[(i + 1) % loop.length]], verts[v])), 0);
+    if (round > PINHOLE) continue;
+    for (let i = 1; i < loop.length - 1; i++) kept.push([loop[0], loop[i + 1], loop[i]]);
+    for (const v of loop) next.delete(v);
+  }
+  return { verts, tris: kept };
 }
 
 const meshXml = ({ verts, tris }) => `<mesh><vertices>${verts.map((v) => `<vertex x="${num(v[0])}" y="${num(v[1])}" z="${num(v[2])}"/>`).join('')}</vertices>`

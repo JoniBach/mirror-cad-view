@@ -53,12 +53,8 @@
   .copies[hidden] { display: none; }
   .copy { font-size: 13px; }
   .count, .role { color: var(--ink-3); font-size: 12px; }
-  .pick { display: flex; align-items: center; gap: 6px; padding: 0 18px 6px; flex-wrap: wrap; }
-  .pick span { color: var(--ink-3); font-size: 12px; margin-right: 2px; }
-  .pick button { padding: 3px 8px; font-size: 12px; color: var(--ink-2); }
-  .picked { padding: 0 18px 4px; color: var(--ink-3); font-size: 12px; }
   /* The download ticks, drawn here so a part-ticked group's dash shows on the dark ground */
-  .tick { appearance: none; position: relative; width: 13px; height: 13px; margin: 0 4px 0 0; border: 1px solid var(--ink-3); border-radius: 3px; background: none; cursor: pointer; }
+  .tick { touch-action: none; appearance: none; position: relative; width: 13px; height: 13px; margin: 0 4px 0 0; border: 1px solid var(--ink-3); border-radius: 3px; background: none; cursor: pointer; }
   .tick:checked { background: var(--ink-1); border-color: var(--ink-1); }
   .tick:checked::after { content: ""; position: absolute; left: 3.5px; top: 0.5px; width: 3px; height: 7px; border: solid var(--ground); border-width: 0 2px 2px 0; transform: rotate(45deg); }
   .tick:indeterminate { border-color: var(--ink-1); }
@@ -96,7 +92,6 @@
     <button id="reset">Reset view</button>
   </div>
   <h2>Parts</h2>
-  <div class="pick"><span>Tick</span><button id="tick-all" title="Tick every printed part">All</button><button id="tick-none" title="Untick everything">None</button><button id="tick-shown" title="Tick only the parts shown">Shown</button><button id="tick-selected" title="Tick only the selected part">Selected</button></div>
   <div class="picked" id="picked"></div>
   <ul class="tree" id="tree"></ul>
 </aside>
@@ -104,6 +99,6 @@
   <div><h1 id="title"></h1><div class="meta" id="meta"></div><div class="note" id="note"></div><ul class="rules" id="rules"></ul></div>
   <div><div class="actions"><button data-get="stl">Download STL</button><button data-get="3mf">Download 3MF</button><button id="copy">Copy link</button></div><div id="picked-foot"></div><div id="status"></div></div>
 </footer>
-<script type="module" src="view.mjs?v=d5f104a"></script>
+<script type="module" src="view.mjs?v=b4a313f"></script>
 </body>
 </html>

@@ -2,9 +2,9 @@
 // with a parts panel to show, hide and restyle each part, tick the parts a download holds, and make print files (STL,
 // or a 3MF in Bambu Studio's layout) in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=d5f104a';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=b4a313f';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=d5f104a';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=b4a313f';
 
 const $ = (id) => document.getElementById(id);
 const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
@@ -104,8 +104,10 @@ function show(model) {
   function controls(list) {
     const shown = list.some((p) => p.visible), ticked = list.filter((p) => p.ticked).length;
     const box = Object.assign(el('input', 'tick'), { type: 'checkbox', checked: ticked === list.length, indeterminate: ticked > 0 && ticked < list.length,
-      title: 'In the download: tick to include' });
-    box.onclick = (e) => { e.stopPropagation(); list.forEach((p) => { p.ticked = box.checked; }); renderTree(); };
+      title: 'In the download: click, or drag up or down over several' });
+    box.ticks = list; // painted by a drag (below), which handles mouse and touch alike
+    box.onclick = (e) => { e.stopPropagation(); e.preventDefault(); if (!e.detail) setTicks(list, ticked < list.length); }; // detail 0: the keyboard
+
     return [box,
       button(`eye${shown ? '' : ' off'}`, shown ? '●' : '○', shown ? 'Shown: click to hide' : 'Hidden: click to show', () => { list.forEach((p) => { p.visible = !shown; }); apply(); }),
       button('style', styleOf(list), 'Style: auto, solid, wire, x-ray or faint', () => {
@@ -154,11 +156,27 @@ function show(model) {
   }
 
   // ---------- what a download holds ----------
-  const tick = (fn) => { parts.forEach((p) => { p.ticked = fn(p); }); renderTree(); };
-  $('tick-all').onclick = () => tick((p) => p.role !== 'reference');
-  $('tick-none').onclick = () => tick(() => false);
-  $('tick-shown').onclick = () => tick((p) => effective(p) !== 'hidden');
-  $('tick-selected').onclick = () => { if (view.selected.size) tick((p) => view.selected.has(p)); else status('Select a part first: click it in the model or the list'); };
+  // Like Blender's layer toggles: press a tick and it flips; drag up or down and every tick passed over takes the same
+  // state. Rows re-render as ticks change, so the drag finds the tick under the pointer rather than holding one.
+  function setTicks(list, on) { if (list.some((p) => p.ticked !== on)) { list.forEach((p) => { p.ticked = on; }); renderTree(); } }
+  let painting = null; // the state being painted, while a drag is on
+  $('tree').addEventListener('pointerdown', (e) => {
+    const box = e.target.closest('.tick');
+    if (!box || e.button > 0) return;
+    e.preventDefault();
+    painting = !box.ticks.every((p) => p.ticked);
+    setTicks(box.ticks, painting);
+    addEventListener('click', swallow, true); // the click that ends a drag lands on whatever row is there now: not a select
+  });
+  const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
+  addEventListener('pointermove', (e) => {
+    if (painting == null) return;
+    const box = document.elementFromPoint(e.clientX, e.clientY)?.closest('.tick');
+    if (box?.list) setTicks(box.ticks, painting);
+    addEventListener('click', swallow, true); // the click that ends a drag lands on whatever row is there now: not a select
+  });
+  const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
+  for (const end of ['pointerup', 'pointercancel']) addEventListener(end, () => { painting = null; setTimeout(() => removeEventListener('click', swallow, true)); });
   // The parts ticked, and a name for them: everything (no name), one copy (cap-2-4), one kind (keycap), or a count
   const picked = () => {
     const on = parts.filter((p) => p.ticked);
