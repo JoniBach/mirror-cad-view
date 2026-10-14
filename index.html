@@ -70,6 +70,8 @@
   .views .seg { background: #000; }
   .views .seg[hidden] { display: none; }
   .views .seg button { flex: none; padding: 6px 12px; }
+  #jump { padding: 6px 12px; font-size: 13px; background: #000; }
+  #jump[hidden] { display: none; }
   #flat { position: absolute; inset: 0; overflow: hidden; background: #000; touch-action: none; cursor: grab; z-index: 1; }
   #flat[hidden] { display: none; }
   #flat img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
@@ -91,7 +93,7 @@
 </head>
 <body>
 <div id="stage"><button id="toggle" title="Show or hide the parts panel">Parts</button>
-  <div class="views"><div class="seg" id="tabs" hidden></div><div class="seg" id="subtabs" hidden></div></div>
+  <div class="views"><div class="seg" id="tabs" hidden></div><div class="seg" id="subtabs" hidden></div><button id="jump" hidden title="Show this board flat, from above">Board view ›</button></div>
   <div id="flat" hidden><img alt="2D view"></div></div>
 <aside id="panel" hidden><!-- closed until the script opens it on a wide screen with a mouse -->
   <div class="panel-head"><h2>View</h2><button id="close" title="Hide the parts panel">Close</button></div>
@@ -115,6 +117,6 @@
   // If the page's script can't run (a stale copy, a blocked request, a bug), say so instead of leaving a black page
   addEventListener('error', (e) => { const s = document.getElementById('status'); if (s && !document.getElementById('title').textContent) s.textContent = `The page didn't load (${e.message || 'a script failed'}). Reload it; if that doesn't help, send this line to Claude.`; }, true);
 </script>
-<script type="module" src="view.mjs?v=d1497bc"></script>
+<script type="module" src="view.mjs?v=9704f11"></script>
 </body>
 </html>

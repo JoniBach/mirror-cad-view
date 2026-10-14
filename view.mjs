@@ -2,9 +2,9 @@
 // with a parts panel to show, hide and restyle each part, tick the parts a download holds, and make print files (STL,
 // or a 3MF in Bambu Studio's layout) in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=d1497bc';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=9704f11';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=d1497bc';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=9704f11';
 
 const $ = (id) => document.getElementById(id);
 const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
@@ -152,6 +152,8 @@ function show(model) {
       const b = new Box3(); list.forEach((p) => b.union(p.g.boundingBox)); const sz = b.getSize(new Vector3());
       status(`${instanceOf(list[0]).split('.')[0]}: ${list[0].label}${list[0].role !== 'part' ? ` (${list[0].role})` : ''}, ${sz.x.toFixed(1)} × ${sz.z.toFixed(1)} × ${sz.y.toFixed(1)} mm`);
     } else status('');
+    // Tell the 2D views what's picked: a board offers its flat view
+    dispatchEvent(new CustomEvent('cad:select', { detail: view.selected.size ? { name: list[0].name, label: list[0].label } : null }));
     apply();
   }
 
@@ -277,6 +279,7 @@ function flatViews(model) {
     subs.replaceChildren(...(g && g.items.length > 1 ? g.items.map((i) => button(i.label, i === item, () => open(g, i))) : []));
     subs.hidden = !(g && g.items.length > 1);
     flat.hidden = !g;
+    $('jump').hidden = true;
     if (g) { item.url ||= URL.createObjectURL(new Blob([item.svg], { type: 'image/svg+xml' })); if (img.src !== item.url) img.src = item.url; else fit(); }
   };
   // Pan and zoom: one pointer pans, two pinch; the wheel zooms about the pointer
@@ -298,6 +301,12 @@ function flatViews(model) {
   flat.addEventListener('wheel', (e) => { e.preventDefault(); zoom(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
   flat.addEventListener('dblclick', fit);
   new ResizeObserver(() => { if (current?.g) fit(); }).observe(flat);
+  // From the 3D model: pick the board (or its copper) and a button opens its flat view
+  const board = groups.find((g) => /board/i.test(g.name)), jump = $('jump');
+  if (board) {
+    jump.onclick = () => open(board, board.items[0]);
+    addEventListener('cad:select', (e) => { jump.hidden = !(e.detail && /pcb|copper/i.test(`${e.detail.name} ${e.detail.label}`)) || !!current?.g; });
+  }
   tabs.hidden = false;
   open(null);
 }
