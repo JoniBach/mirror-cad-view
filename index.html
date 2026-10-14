@@ -60,6 +60,7 @@
   .tick:checked::after { content: ""; position: absolute; left: 3.5px; top: 0.5px; width: 3px; height: 7px; border: solid var(--ground); border-width: 0 2px 2px 0; transform: rotate(45deg); }
   .tick:indeterminate { border-color: var(--ink-1); }
   .tick:indeterminate::after { content: ""; position: absolute; left: 2px; right: 2px; top: 5px; height: 2px; background: var(--ink-1); }
+  .eye { touch-action: none; }
   .eye, .style { background: none; border: 0; padding: 2px 4px; color: var(--ink-2); font-size: 12px; cursor: pointer; }
   .eye { font-size: 13px; width: 20px; }
   .style { width: 44px; text-align: right; }
@@ -117,6 +118,6 @@
   // If the page's script can't run (a stale copy, a blocked request, a bug), say so instead of leaving a black page
   addEventListener('error', (e) => { const s = document.getElementById('status'); if (s && !document.getElementById('title').textContent) s.textContent = `The page didn't load (${e.message || 'a script failed'}). Reload it; if that doesn't help, send this line to Claude.`; }, true);
 </script>
-<script type="module" src="view.mjs?v=9704f11"></script>
+<script type="module" src="view.mjs?v=6793575"></script>
 </body>
 </html>

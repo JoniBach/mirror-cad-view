@@ -2,9 +2,9 @@
 // with a parts panel to show, hide and restyle each part, tick the parts a download holds, and make print files (STL,
 // or a 3MF in Bambu Studio's layout) in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=9704f11';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=6793575';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=9704f11';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=6793575';
 
 const $ = (id) => document.getElementById(id);
 const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
@@ -105,11 +105,12 @@ function show(model) {
     const shown = list.some((p) => p.visible), ticked = list.filter((p) => p.ticked).length;
     const box = Object.assign(el('input', 'tick'), { type: 'checkbox', checked: ticked === list.length, indeterminate: ticked > 0 && ticked < list.length,
       title: 'In the download: click, or drag up or down over several' });
-    box.ticks = list; // painted by a drag (below), which handles mouse and touch alike
-    box.onclick = (e) => { e.stopPropagation(); e.preventDefault(); if (!e.detail) setTicks(list, ticked < list.length); }; // detail 0: the keyboard
+    box.flag = 'ticked'; box.parts = list; // painted by a drag (below), which handles mouse and touch alike
+    box.onclick = (e) => { e.stopPropagation(); e.preventDefault(); if (!e.detail) setFlag('ticked', list, ticked < list.length); }; // detail 0: the keyboard
+    const eye = button(`eye${shown ? '' : ' off'}`, shown ? '●' : '○', shown ? 'Shown: click to hide, or drag over several' : 'Hidden: click to show, or drag over several', () => {});
+    eye.flag = 'visible'; eye.parts = list; eye.onclick = (e) => { e.stopPropagation(); e.preventDefault(); if (!e.detail) setFlag('visible', list, !shown); };
 
-    return [box,
-      button(`eye${shown ? '' : ' off'}`, shown ? '●' : '○', shown ? 'Shown: click to hide' : 'Hidden: click to show', () => { list.forEach((p) => { p.visible = !shown; }); apply(); }),
+    return [box, eye,
       button('style', styleOf(list), 'Style: auto, solid, wire, x-ray or faint', () => {
         const next = STYLES[(STYLES.indexOf(styleOf(list)) + 1) % STYLES.length] || 'auto';
         list.forEach((p) => { p.style = next; }); apply();
@@ -157,24 +158,30 @@ function show(model) {
     apply();
   }
 
-  // ---------- what a download holds ----------
-  // Like Blender's layer toggles: press a tick and it flips; drag up or down and every tick passed over takes the same
-  // state. Rows re-render as ticks change, so the drag finds the tick under the pointer rather than holding one.
-  function setTicks(list, on) { if (list.some((p) => p.ticked !== on)) { list.forEach((p) => { p.ticked = on; }); renderTree(); } }
-  let painting = null; // the state being painted, while a drag is on
+  // ---------- toggles you can paint ----------
+  // Like Blender's toggles: press a download tick or a visibility eye and it flips; keep the button down and drag up or
+  // down, and every toggle of the same kind passed over takes that state (ticked or not, shown or hidden), whatever it
+  // was. Rows re-render as toggles change, so the drag finds the toggle under the pointer rather than holding one.
+  function setFlag(flag, list, on) {
+    if (!list.some((p) => p[flag] !== on)) return;
+    list.forEach((p) => { p[flag] = on; });
+    if (flag === 'visible') apply(); else renderTree(); // apply redraws the list too
+  }
+  const toggleAt = (x, y) => { const t = document.elementFromPoint(x, y)?.closest('.tick, .eye'); return t?.parts ? t : null; };
+  let painting = null; // { flag, on } while a drag is on
   $('tree').addEventListener('pointerdown', (e) => {
-    const box = e.target.closest('.tick');
-    if (!box || e.button > 0) return;
+    const t = e.target.closest('.tick, .eye');
+    if (!t?.parts || e.button > 0) return;
     e.preventDefault();
-    painting = !box.ticks.every((p) => p.ticked);
-    setTicks(box.ticks, painting);
+    painting = { flag: t.flag, on: !t.parts.every((p) => p[t.flag]) };
+    setFlag(painting.flag, t.parts, painting.on);
     addEventListener('click', swallow, true); // the click that ends a drag lands on whatever row is there now: not a select
   });
   const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
   addEventListener('pointermove', (e) => {
-    if (painting == null) return;
-    const box = document.elementFromPoint(e.clientX, e.clientY)?.closest('.tick');
-    if (box?.ticks) setTicks(box.ticks, painting);
+    if (!painting) return;
+    const t = toggleAt(e.clientX, e.clientY);
+    if (t && t.flag === painting.flag) setFlag(painting.flag, t.parts, painting.on);
   });
   for (const end of ['pointerup', 'pointercancel']) addEventListener(end, () => { painting = null; setTimeout(() => removeEventListener('click', swallow, true)); });
   // The parts ticked, and a name for them: everything (no name), one copy (cap-2-4), one kind (keycap), or a count
