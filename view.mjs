@@ -2,9 +2,9 @@
 // with a parts panel to show, hide and restyle each part, tick the parts a download holds, and make print files (STL,
 // or a 3MF in Bambu Studio's layout) in the browser. Nothing is uploaded:
 // the model lives in the link (or, for a short link, in the Gist it names).
-import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=a3e87f9';
+import { parseHash, decode, fromGist, triangles, partsOf, stl, threemf, filename, thingOf } from './model-link.mjs?v=d1497bc';
 import { WebGLRenderer, Scene, PerspectiveCamera, BufferGeometry, Float32BufferAttribute, Mesh, MeshLambertMaterial, LineSegments,
-  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=a3e87f9';
+  EdgesGeometry, LineBasicMaterial, AmbientLight, DirectionalLight, Group, WireframeGeometry, Raycaster, Vector2, Vector3, Box3 } from './three.min.js?v=d1497bc';
 
 const $ = (id) => document.getElementById(id);
 const DRAWER = '(max-width: 760px), (pointer: coarse) and (max-width: 1100px)'; // the same query as the drawer's CSS
@@ -239,11 +239,67 @@ function show(model) {
     drag = null;
   });
   renderer.setAnimationLoop((now) => {
+    if (stage.classList.contains('flat')) { last = now; return; } // a 2D view is up: nothing to draw
     if (!drag && view.spin) turn.rotation.y += ((now - last) / 60000) * 2 * Math.PI;
     last = now; renderer.render(scene, camera);
   });
   apply();
   return { picked };
+}
+
+// ---------- 2D views ----------
+// A board's copper and its schematic come in the link as SVG drawings ([[name, svg]]). They're shown as images (an
+// <img> never runs anything inside an SVG), in tabs over the 3D view: "Board: front" and "Board: back" are choices
+// inside the Board tab. Drag to pan, wheel or pinch to zoom, double-click to fit.
+function flatViews(model) {
+  const list = (model.views || []).filter((v) => Array.isArray(v) && typeof v[0] === 'string' && typeof v[1] === 'string');
+  if (!list.length) return;
+  const stage = $('stage'), tabs = $('tabs'), subs = $('subtabs'), flat = $('flat'), img = flat.querySelector('img');
+  const groups = [];
+  for (const [name, svg] of list) {
+    const [g, sub] = name.split(': ');
+    let x = groups.find((y) => y.name === g);
+    if (!x) groups.push(x = { name: g, items: [] });
+    x.items.push({ label: sub || g, svg, url: null });
+  }
+  const at = { s: 1, x: 0, y: 0 }, place = () => { img.style.transform = `translate(${at.x}px, ${at.y}px) scale(${at.s})`; };
+  const fit = () => {
+    const w = img.naturalWidth || 800, h = img.naturalHeight || 600, W = flat.clientWidth, H = flat.clientHeight;
+    at.s = Math.min(W / w, H / h) * 0.94; at.x = (W - w * at.s) / 2; at.y = (H - h * at.s) / 2; place();
+  };
+  img.onload = fit;
+  const button = (text, on, fn) => { const b = document.createElement('button'); b.textContent = text; b.classList.toggle('on', on); b.onclick = fn; return b; };
+  let current = null;
+  const open = (g, item) => {
+    current = { g, item };
+    stage.classList.toggle('flat', !!g);
+    tabs.replaceChildren(button('3D', !g, () => open(null)), ...groups.map((x) => button(x.name, x === g, () => open(x, x.items[0]))));
+    subs.replaceChildren(...(g && g.items.length > 1 ? g.items.map((i) => button(i.label, i === item, () => open(g, i))) : []));
+    subs.hidden = !(g && g.items.length > 1);
+    flat.hidden = !g;
+    if (g) { item.url ||= URL.createObjectURL(new Blob([item.svg], { type: 'image/svg+xml' })); if (img.src !== item.url) img.src = item.url; else fit(); }
+  };
+  // Pan and zoom: one pointer pans, two pinch; the wheel zooms about the pointer
+  const pts = new Map();
+  let pinch = null;
+  const zoom = (k, cx, cy) => { const r = flat.getBoundingClientRect(), px = cx - r.left, py = cy - r.top; at.x = px - (px - at.x) * k; at.y = py - (py - at.y) * k; at.s *= k; place(); };
+  flat.addEventListener('pointerdown', (e) => { flat.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); pinch = null; });
+  flat.addEventListener('pointermove', (e) => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    if (pts.size === 1) { at.x += e.clientX - p.x; at.y += e.clientY - p.y; place(); }
+    else if (pts.size === 2) {
+      const [a, b] = [...pts.values()], other = a === p ? b : a, d = Math.hypot(e.clientX - other.x, e.clientY - other.y);
+      if (pinch) zoom(d / pinch, (e.clientX + other.x) / 2, (e.clientY + other.y) / 2);
+      pinch = d;
+    }
+    p.x = e.clientX; p.y = e.clientY;
+  });
+  for (const end of ['pointerup', 'pointercancel']) flat.addEventListener(end, (e) => { pts.delete(e.pointerId); pinch = null; });
+  flat.addEventListener('wheel', (e) => { e.preventDefault(); zoom(Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY); }, { passive: false });
+  flat.addEventListener('dblclick', fit);
+  new ResizeObserver(() => { if (current?.g) fit(); }).observe(flat);
+  tabs.hidden = false;
+  open(null);
 }
 
 async function main() {
@@ -259,6 +315,7 @@ async function main() {
     return;
   }
   const project = show(model);
+  flatViews(model);
   for (const b of document.querySelectorAll('[data-get]')) b.addEventListener('click', () => download(model, b.dataset.get, project.picked()));
   $('copy').addEventListener('click', async () => {
     await navigator.clipboard.writeText(`${location.origin}${location.pathname}${gist ? `#s=${gist}` : `#m=${token}`}`); status('Link copied'); // short stays short

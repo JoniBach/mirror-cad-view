@@ -65,6 +65,15 @@
   .style { width: 44px; text-align: right; }
   .eye.off { color: var(--ink-3); }
   .selected { background: #1a1a1a !important; color: var(--ink-1) !important; }
+  /* 2D views (a board's copper, its schematic): tabs over the stage, the drawing panned and zoomed under them */
+  .views { position: absolute; top: 14px; left: 14px; z-index: 2; display: grid; gap: 8px; justify-items: start; }
+  .views .seg { background: #000; }
+  .views .seg[hidden] { display: none; }
+  .views .seg button { flex: none; padding: 6px 12px; }
+  #flat { position: absolute; inset: 0; overflow: hidden; background: #000; touch-action: none; cursor: grab; z-index: 1; }
+  #flat[hidden] { display: none; }
+  #flat img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+  #stage.flat canvas { visibility: hidden; }
   #toggle { position: absolute; top: 14px; right: 14px; z-index: 2; padding: 6px 12px; font-size: 13px; background: #000; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; padding-right: 14px; }
   #close { padding: 4px 10px; font-size: 13px; margin-top: 10px; }
@@ -81,7 +90,9 @@
 </style>
 </head>
 <body>
-<div id="stage"><button id="toggle" title="Show or hide the parts panel">Parts</button></div>
+<div id="stage"><button id="toggle" title="Show or hide the parts panel">Parts</button>
+  <div class="views"><div class="seg" id="tabs" hidden></div><div class="seg" id="subtabs" hidden></div></div>
+  <div id="flat" hidden><img alt="2D view"></div></div>
 <aside id="panel" hidden><!-- closed until the script opens it on a wide screen with a mouse -->
   <div class="panel-head"><h2>View</h2><button id="close" title="Hide the parts panel">Close</button></div>
   <div class="controls">
@@ -104,6 +115,6 @@
   // If the page's script can't run (a stale copy, a blocked request, a bug), say so instead of leaving a black page
   addEventListener('error', (e) => { const s = document.getElementById('status'); if (s && !document.getElementById('title').textContent) s.textContent = `The page didn't load (${e.message || 'a script failed'}). Reload it; if that doesn't help, send this line to Claude.`; }, true);
 </script>
-<script type="module" src="view.mjs?v=a3e87f9"></script>
+<script type="module" src="view.mjs?v=d1497bc"></script>
 </body>
 </html>

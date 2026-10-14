@@ -7,13 +7,15 @@
 //     seen from outside; Z up, the bed at z = 0.
 //     parts (optional): [[name, role, label, first, count, slot?]], runs of triangles in t; role "support" is printed,
 //     then removed; slot is the part's AMS slot (1 without one). Without parts, the whole model is one part.
+//     views (optional): [[name, svg]], 2D drawings shown beside the 3D model (a board's copper, a schematic); "Group:
+//     view" names share a tab. The page shows them as images, so nothing in them runs.
 //   Or placed shapes, for things made of repeated parts (nine keys): each shape once, then where each copy goes:
 //     { …, shapes: [{ role, label, slot?, q, p, t }], place: [[shape, a, b, c, d, e, f, g, h, i, j, k, l, name?]] }
 //     (a 3 × 4 transform by rows, in mm). decode() expands them, so the rest of the page sees one model.
 // "1." is the format version: newer pages must keep reading old links.
 
 export const VERSION = 1;
-export const LIMITS = { vertices: 200000, triangles: 400000, shapes: 512, places: 2048 }; // every keycap with its own legend is its own shape
+export const LIMITS = { vertices: 200000, triangles: 400000, shapes: 512, places: 2048, views: 8, viewSize: 4e6 }; // every keycap with its own legend is its own shape
 
 const b64 = (bytes) => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const unb64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
@@ -90,6 +92,7 @@ export function check(m) {
   if (m.p.length / 3 > LIMITS.vertices || m.t.length / 3 > LIMITS.triangles) return ['model too big for a link'];
   const n = m.p.length / 3;
   if (m.p.some((x) => !Number.isInteger(x)) || m.t.some((i) => !Number.isInteger(i) || i < 0 || i >= n)) return ['broken model data'];
+  if (m.views != null && (!Array.isArray(m.views) || m.views.length > LIMITS.views || m.views.some((v) => !Array.isArray(v) || typeof v[0] !== 'string' || typeof v[1] !== 'string' || v[1].length > LIMITS.viewSize))) return ['broken views'];
   if (m.parts != null && (!Array.isArray(m.parts) || m.parts.some((x) => !Array.isArray(x) || !Number.isInteger(x[3]) || !Number.isInteger(x[4]) || x[3] < 0 || x[3] + x[4] > m.t.length / 3))) return ['broken parts list'];
   return [];
 }
